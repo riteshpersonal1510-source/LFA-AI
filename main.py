@@ -46,6 +46,7 @@ if os.path.isdir(_PYTHON_SCRAPER_ROOT) and _PYTHON_SCRAPER_ROOT not in sys.path:
 SCRAPER_AVAILABLE = False
 scrape_router = None
 browser_pool = None
+_scraper_import_error = None
 
 try:
     from scraper_service.api.routers.scrape import router as scrape_router
@@ -82,17 +83,17 @@ async def lifespan(app: FastAPI):
     elif not SCRAPER_AVAILABLE:
         logger.warning(
             "[BOOT] Scraper routes unavailable — %s",
-            globals().get("_scraper_import_error", "python-scraper package not found"),
+            _scraper_import_error or "python-scraper package not found",
         )
 
     # Run X11 diagnostics only if not disabled
     if not settings.disable_x11_features:
         from app.services.whatsapp.x11_diagnostics import X11Diagnostics
-        
+
         logger.info("[BOOT] Running X11/DISPLAY startup diagnostics...")
         diagnostics = X11Diagnostics.run_full_diagnostics()
         X11Diagnostics.log_diagnostics(diagnostics)
-        
+
         if not diagnostics.get("x11_connection_ok"):
             logger.warning("[BOOT] X11 connection diagnostic failed — PyAutoGUI-based features may be unavailable")
             X11Diagnostics.log_remediation(diagnostics)
@@ -152,7 +153,7 @@ register_exception_handlers(app)
 
 app.add_middleware(
     CORSMiddleware,
-        allow_origins=[settings.frontend_url] if settings.frontend_url else ["*"],
+    allow_origins=[settings.frontend_url] if settings.frontend_url else ["*"],
     allow_headers=["*"],
 )
 
