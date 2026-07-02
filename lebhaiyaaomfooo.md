@@ -210,7 +210,6 @@ PHASE 13 — PRODUCTION TEST
 Verify
 GET /
 GET /health
-GET /openapi.json
 POST /api/v1/search
 POST /api/v1/scraper/search
 GET /api/v1/scraper/search-progress/test
@@ -365,12 +364,12 @@ AI_SERVICE_URL
 
 ===========================================================
 PHASE 3
-VERIFY OPENAPI
+VERIFY  
 ===========================================================
 
 Open
 
-/openapi.json
+  
 
 Verify endpoints exist.
 
@@ -758,7 +757,6 @@ GET /
 
 GET /health
 
-GET /openapi.json
 
 POST /api/v1/search
 
@@ -1160,8 +1158,6 @@ STEP 14
 ====================================================
 
 Verify
-
-/openapi.json
 
 contains
 
