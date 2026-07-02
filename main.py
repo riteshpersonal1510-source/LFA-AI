@@ -27,6 +27,13 @@ from app.routes import health_router, analysis_router, whatsapp_router
 from app.services.whatsapp.api import router as whatsapp_api_router
 from app.services.whatsapp.database import connect as db_connect, disconnect as db_disconnect
 
+# Configure logging EARLY
+logging.basicConfig(
+    level=settings.log_level.upper(),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
 # ---------------------------------------------------------------------------
 # Mount local or sibling python-scraper package for unified deployment
 # ---------------------------------------------------------------------------
@@ -48,36 +55,41 @@ scrape_router = None
 browser_pool = None
 _scraper_import_error = None
 
+print("[DEBUG] Attempting to import scraper modules...")
+print(f"[DEBUG] Python path: {sys.path[:3]}")
+print(f"[DEBUG] APP_ROOT: {_APP_ROOT}")
+print(f"[DEBUG] PYTHON_SCRAPER_ROOT: {_PYTHON_SCRAPER_ROOT}")
+
 try:
     from scraper_service.api.routers.scrape import router as scrape_router
     from scraper_service.browser.browser_pool import browser_pool
 
     SCRAPER_AVAILABLE = True
+    print("[DEBUG] ✅ Scraper modules imported successfully")
     logger.info("[IMPORT] ✅ Scraper modules imported successfully")
 except ImportError as import_err:
     scrape_router = None
     browser_pool = None
     _scraper_import_error = str(import_err)
+    print(f"[DEBUG] ❌ Scraper import failed: {_scraper_import_error}")
     logger.error("[IMPORT] ❌ Scraper import failed: %s", _scraper_import_error)
     logger.error("[IMPORT] Available paths: %s", sys.path[:5])
     
     # Check if scraper_service directory exists
     scraper_path = os.path.join(_APP_ROOT, "scraper_service")
-    logger.info("[IMPORT] Scraper service path exists: %s", os.path.exists(scraper_path))
-    if os.path.exists(scraper_path):
-        logger.info("[IMPORT] Contents: %s", os.listdir(scraper_path)[:10])
+    scraper_exists = os.path.exists(scraper_path)
+    print(f"[DEBUG] Scraper service path exists: {scraper_exists}")
+    logger.info("[IMPORT] Scraper service path exists: %s", scraper_exists)
+    if scraper_exists:
+        contents = os.listdir(scraper_path)[:10]
+        print(f"[DEBUG] Contents: {contents}")
+        logger.info("[IMPORT] Contents: %s", contents)
 except Exception as e:
     scrape_router = None
     browser_pool = None
     _scraper_import_error = f"Unexpected error: {str(e)}"
+    print(f"[DEBUG] ❌ Unexpected scraper import error: {_scraper_import_error}")
     logger.error("[IMPORT] ❌ Unexpected scraper import error: %s", _scraper_import_error)
-
-# Configure logging
-logging.basicConfig(
-    level=settings.log_level.upper(),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
