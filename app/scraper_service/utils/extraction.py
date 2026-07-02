@@ -158,6 +158,79 @@ def extract_social_links(links: List[str]) -> Dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
+# Location parsing
+# ---------------------------------------------------------------------------
+
+def parse_address_components(address: str) -> Dict[str, Optional[str]]:
+    """Parse address into components: area, city, state, country, pincode."""
+    if not address:
+        return {"area": None, "city": None, "state": None, "country": None, "pincode": None}
+    
+    # Extract pincode/postal code
+    pincode_match = re.search(r'\b(\d{5,6})\b', address)
+    pincode = pincode_match.group(1) if pincode_match else None
+    
+    # Split by comma and clean
+    parts = [part.strip() for part in address.split(',')]
+    parts = [part for part in parts if part and not part.isdigit()]
+    
+    # Simple heuristic based on common patterns
+    area = None
+    city = None
+    state = None
+    country = None
+    
+    if len(parts) >= 1:
+        area = parts[0]
+    if len(parts) >= 2:
+        city = parts[-2] if len(parts) > 2 else parts[1]
+    if len(parts) >= 3:
+        state = parts[-1]
+        country = "India" if any(keyword in address.lower() for keyword in ["india", "bharat"]) else None
+    
+    # Common Indian states for better detection
+    indian_states = {
+        "maharashtra", "delhi", "karnataka", "tamil nadu", "gujarat", "rajasthan",
+        "uttar pradesh", "west bengal", "andhra pradesh", "telangana", "kerala",
+        "punjab", "haryana", "bihar", "odisha", "madhya pradesh"
+    }
+    
+    # If any part matches Indian state, assume India
+    for part in parts:
+        if part.lower() in indian_states:
+            country = "India"
+            state = part
+            break
+    
+    return {
+        "area": area,
+        "city": city, 
+        "state": state,
+        "country": country,
+        "pincode": pincode
+    }
+
+
+# ---------------------------------------------------------------------------
+# Coordinate extraction
+# ---------------------------------------------------------------------------
+
+def extract_coordinates_from_url(url: str) -> Tuple[Optional[float], Optional[float]]:
+    """Extract latitude and longitude from Google Maps URL."""
+    # Pattern: @latitude,longitude,zoom
+    coord_pattern = r'@(-?\d+\.\d+),(-?\d+\.\d+),\d+'
+    match = re.search(coord_pattern, url)
+    if match:
+        try:
+            lat = float(match.group(1))
+            lng = float(match.group(2))
+            return lat, lng
+        except ValueError:
+            pass
+    return None, None
+
+
+# ---------------------------------------------------------------------------
 # Lead score (mirrors backend/src/core/scraper-engine/lead-storage.ts)
 # ---------------------------------------------------------------------------
 

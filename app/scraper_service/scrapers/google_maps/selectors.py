@@ -18,6 +18,7 @@ DETAIL_CATEGORY = [
     'button[jsaction*="category"]',
     'button[aria-label*="Category"]',
     'span[jsaction*="category"]',
+    ".DkEaL",
 ]
 
 DETAIL_PHONE = [
@@ -54,6 +55,58 @@ DETAIL_PANEL_SCROLL = '[role="dialog"], div[role="main"], div.m6QErb'
 DETAIL_RATING = [
     'span[role="img"][aria-label*="stars"]',
     'span[aria-label*="star"]',
+    'div[aria-label*="stars"]',
+]
+
+# Business status (Open/Closed)
+DETAIL_BUSINESS_STATUS = [
+    'span[aria-label*="Open"]',
+    'span[aria-label*="Closed"]',
+    'span[aria-label*="Closes"]',
+    'span[aria-label*="Opens"]',
+    '.OqCZI span',
+    '.ZDu9vd span',
+]
+
+# Working hours
+DETAIL_WORKING_HOURS = [
+    'table[aria-label*="Hours"]',
+    'div[aria-label*="Hours"]', 
+    '.t39EBf',
+    '.eK4R0e',
+    '[data-value*="OpeningHours"]',
+]
+
+# Plus Code
+DETAIL_PLUS_CODE = [
+    'button[data-item-id*="oloc"]',
+    'button[aria-label*="Plus code"]',
+    'button[aria-label*="plus code"]',
+    'div[data-value*="plus_code"]',
+]
+
+# Owner claimed / verification badge
+DETAIL_OWNER_CLAIMED = [
+    'span[aria-label*="Claimed"]',
+    'span[aria-label*="Verified"]',
+    '.RZ66Rb span',
+    'button[aria-label*="Claim this business"]',
+]
+
+# Total photos count
+DETAIL_TOTAL_PHOTOS = [
+    'button[aria-label*="photos"]',
+    'button[aria-label*="Photos"]',
+    'button[data-item-id*="photos"]',
+    '.Gpq6kf .fontTitleSmall',
+]
+
+# Service options (delivery, takeout, etc.)
+DETAIL_SERVICE_OPTIONS = [
+    'div[aria-label*="Service options"]',
+    'div[aria-label*="Highlights"]',
+    '.AeaXub',
+    '.RWPxGd',
 ]
 
 END_OF_LIST_SELECTORS = [".HlvXi", ".PbZDve", ".lCKMBd"]

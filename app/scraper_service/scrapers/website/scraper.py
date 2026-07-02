@@ -161,3 +161,59 @@ class WebsiteScraper(BaseScraper):
             except Exception:
                 pass
         return None
+
+    async def extract_email_from_website(self, url: str) -> Optional[str]:
+        """Extract email from website homepage and contact pages."""
+        if not url:
+            return None
+            
+        page, _, _ = await browser_pool.acquire("email-extraction", self.browser_type)
+        try:
+            # Try homepage first
+            try:
+                await page.goto(url, wait_until="domcontentloaded", timeout=10000)
+                body_text = await page.evaluate("() => document.body?.innerText || ''")
+                emails = extract_emails(body_text)
+                
+                # Filter out placeholder emails
+                valid_emails = [
+                    email for email in emails 
+                    if not any(placeholder in email.lower() for placeholder in [
+                        'example@', 'test@', 'yourname@', 'your-email@', 'placeholder@'
+                    ])
+                ]
+                if valid_emails:
+                    return valid_emails[0]
+                    
+            except Exception:
+                pass
+            
+            # Try contact pages
+            contact_paths = ['/contact', '/contact-us', '/about', '/about-us']
+            base_url = url.rstrip('/')
+            
+            for path in contact_paths:
+                try:
+                    contact_url = f"{base_url}{path}"
+                    await page.goto(contact_url, wait_until="domcontentloaded", timeout=8000)
+                    body_text = await page.evaluate("() => document.body?.innerText || ''")
+                    emails = extract_emails(body_text)
+                    
+                    valid_emails = [
+                        email for email in emails 
+                        if not any(placeholder in email.lower() for placeholder in [
+                            'example@', 'test@', 'yourname@', 'your-email@', 'placeholder@'
+                        ])
+                    ]
+                    if valid_emails:
+                        return valid_emails[0]
+                        
+                except Exception:
+                    continue
+                    
+        except Exception as e:
+            logger.warning("Email extraction failed for {}: {}", url, str(e))
+        finally:
+            await browser_pool.release(page, "email-extraction")
+            
+        return None
