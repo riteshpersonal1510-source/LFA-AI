@@ -53,10 +53,24 @@ try:
     from scraper_service.browser.browser_pool import browser_pool
 
     SCRAPER_AVAILABLE = True
+    logger.info("[IMPORT] ✅ Scraper modules imported successfully")
 except ImportError as import_err:
     scrape_router = None
     browser_pool = None
     _scraper_import_error = str(import_err)
+    logger.error("[IMPORT] ❌ Scraper import failed: %s", _scraper_import_error)
+    logger.error("[IMPORT] Available paths: %s", sys.path[:5])
+    
+    # Check if scraper_service directory exists
+    scraper_path = os.path.join(_APP_ROOT, "scraper_service")
+    logger.info("[IMPORT] Scraper service path exists: %s", os.path.exists(scraper_path))
+    if os.path.exists(scraper_path):
+        logger.info("[IMPORT] Contents: %s", os.listdir(scraper_path)[:10])
+except Exception as e:
+    scrape_router = None
+    browser_pool = None
+    _scraper_import_error = f"Unexpected error: {str(e)}"
+    logger.error("[IMPORT] ❌ Unexpected scraper import error: %s", _scraper_import_error)
 
 # Configure logging
 logging.basicConfig(
@@ -190,8 +204,9 @@ async def root_health() -> dict:
         "service": settings.app_name,
         "version": settings.app_version,
         "mode": "unified_ai_and_scraper",
+        "scraper_available": SCRAPER_AVAILABLE,
+        "import_error": _scraper_import_error,
         "scraper": "available" if SCRAPER_AVAILABLE else "unavailable", 
-        "scraper_import_error": _scraper_import_error if not SCRAPER_AVAILABLE else None,
         "endpoints": {
             "health": "/health",
             "analysis": "/api/v1/analyze-lead",
@@ -200,6 +215,22 @@ async def root_health() -> dict:
             "search": "/api/v1/search" if SCRAPER_AVAILABLE else None,
             "debug": "/api/v1/debug/routes" if SCRAPER_AVAILABLE else None,
         },
+    }
+
+
+@app.get("/debug/scraper", summary="Debug scraper import status")
+async def debug_scraper() -> dict:
+    """Debug endpoint to check scraper import status."""
+    return {
+        "scraper_available": SCRAPER_AVAILABLE,
+        "import_error": _scraper_import_error,
+        "scrape_router": str(type(scrape_router)) if scrape_router else None,
+        "browser_pool": str(type(browser_pool)) if browser_pool else None,
+        "python_path": sys.path[:5],
+        "app_root": _APP_ROOT,
+        "repo_root": _REPO_ROOT,
+        "python_scraper_root": _PYTHON_SCRAPER_ROOT,
+        "scraper_service_exists": os.path.exists(os.path.join(_APP_ROOT, "scraper_service")),
     }
 
 
