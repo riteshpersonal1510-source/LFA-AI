@@ -28,13 +28,20 @@ from app.services.whatsapp.api import router as whatsapp_api_router
 from app.services.whatsapp.database import connect as db_connect, disconnect as db_disconnect
 
 # ---------------------------------------------------------------------------
-# Mount python-scraper package (sibling directory) for unified deployment
+# Mount local or sibling python-scraper package for unified deployment
 # ---------------------------------------------------------------------------
 _AI_SERVICE_ROOT = os.path.dirname(os.path.abspath(__file__))
+_APP_ROOT = os.path.join(_AI_SERVICE_ROOT, "app")
 _REPO_ROOT = os.path.dirname(_AI_SERVICE_ROOT)
 _PYTHON_SCRAPER_ROOT = os.path.join(_REPO_ROOT, "python-scraper")
+
+# Prioritize the internal app/scraper_service package if present
+if _APP_ROOT not in sys.path:
+    sys.path.insert(0, _APP_ROOT)
+
 if os.path.isdir(_PYTHON_SCRAPER_ROOT) and _PYTHON_SCRAPER_ROOT not in sys.path:
     sys.path.insert(0, _PYTHON_SCRAPER_ROOT)
+
 
 SCRAPER_AVAILABLE = False
 scrape_router = None
