@@ -4,6 +4,8 @@ import os
 from typing import Optional
 from pydantic_settings import BaseSettings
 
+# Global scraper limits - IMPORTANT: This is the source of truth for all lead limits
+MAX_LEADS_PER_SEARCH = 20
 
 class Settings(BaseSettings):
     # Service identity

@@ -241,7 +241,6 @@ async def root_health() -> dict:
         },
     }
 
-
 @app.get("/debug/scraper", summary="Debug scraper import status")
 async def debug_scraper() -> dict:
     """Debug endpoint to check scraper import status."""

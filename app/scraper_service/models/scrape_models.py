@@ -1,7 +1,8 @@
 """Request and response models for the scraper API."""
 
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
+from scraper_service.config.settings import MAX_LEADS_PER_SEARCH
 
 
 class ScrapeRequest(BaseModel):
@@ -19,8 +20,27 @@ class ScrapeRequest(BaseModel):
     businessType: Optional[str] = None
     sessionId: Optional[str] = None
     semanticExpansion: bool = False
-    maxResults: Optional[int] = None
+    maxResults: Optional[int] = Field(
+        default=MAX_LEADS_PER_SEARCH, 
+        le=MAX_LEADS_PER_SEARCH, 
+        description=f"Maximum number of results to return (max {MAX_LEADS_PER_SEARCH})"
+    )
     resumeSessionId: Optional[str] = None
+
+    @validator('maxResults')
+    def validate_max_results(cls, v):
+        if v is not None and v > MAX_LEADS_PER_SEARCH:
+            raise ValueError(f'maxResults cannot exceed {MAX_LEADS_PER_SEARCH}')
+        return v
+
+
+class DataQuality(BaseModel):
+    """Per-batch data quality metrics for transparency."""
+    fieldsAttempted: List[str] = []
+    fieldsPopulated: Dict[str, int] = {}
+    fillRatePercent: Dict[str, float] = {}
+    totalLeads: int = 0
+    extractionWarnings: List[str] = []
 
 
 class SourceResult(BaseModel):
@@ -30,6 +50,7 @@ class SourceResult(BaseModel):
     totalDuplicates: int = 0
     success: bool = False
     error: Optional[str] = None
+    dataQuality: Optional[DataQuality] = None
 
 
 class ScrapedLead(BaseModel):

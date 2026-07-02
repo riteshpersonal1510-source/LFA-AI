@@ -14,6 +14,7 @@ from playwright.async_api import Page
 
 from scraper_service.browser.browser_pool import browser_pool
 from scraper_service.scrapers.base import BaseScraper, ScrapeContext
+from scraper_service.config.settings import MAX_LEADS_PER_SEARCH
 from scraper_service.utils.extraction import calculate_lead_score
 from scraper_service.utils.logger import logger
 
@@ -39,7 +40,11 @@ class ClutchScraper(BaseScraper):
         try:
             await page.goto(ctx.search_url, wait_until="networkidle", timeout=NAV_TIMEOUT)
             await page.wait_for_timeout(2000)
-            return await self._extract_listings(page)
+            results = await self._extract_listings(page)
+            
+            # Enforce hard 20-lead limit
+            effective_limit = min(ctx.max_results or MAX_LEADS_PER_SEARCH, MAX_LEADS_PER_SEARCH)
+            return results[:effective_limit]
         except Exception as exc:  # noqa: BLE001
             await self._capture_failure_artifacts(ctx, exc, page)
             logger.error("{} discovery failed | error={}", self.name, exc)

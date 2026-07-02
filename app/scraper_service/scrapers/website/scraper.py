@@ -6,6 +6,7 @@ from urllib.parse import quote_plus, urlparse
 
 from scraper_service.browser.browser_pool import browser_pool
 from scraper_service.scrapers.base import BaseScraper, ScrapeContext
+from scraper_service.config.settings import MAX_LEADS_PER_SEARCH
 from scraper_service.utils.extraction import calculate_lead_score, extract_emails, extract_phones, extract_social_links, extract_whatsapp_number, select_primary_phone
 from scraper_service.utils.logger import logger
 
@@ -34,7 +35,11 @@ class WebsiteScraper(BaseScraper):
             await page.goto(ctx.search_url, wait_until="domcontentloaded", timeout=NAV_TIMEOUT)
             await page.wait_for_timeout(2000)
             results = await page.evaluate("""() => { const results=[]; const links=document.querySelectorAll('div.g a[href^="http"]'); for (const el of links){ const href=el.getAttribute('href')||''; const text=el.textContent?.trim()||''; if(href && !href.includes('google.com')) { const h3=el.querySelector('h3'); results.push({url: href, title: h3?.textContent || text}); } } return results; }""")
-            return self._filter_urls(results)
+            filtered_results = self._filter_urls(results)
+            
+            # Enforce hard 20-lead limit
+            effective_limit = min(ctx.max_results or MAX_LEADS_PER_SEARCH, MAX_LEADS_PER_SEARCH)
+            return filtered_results[:effective_limit]
         except Exception as exc:  # noqa: BLE001
             await self._capture_failure_artifacts(ctx, exc, page)
             logger.error("{} discovery failed | error={}", self.name, exc)
