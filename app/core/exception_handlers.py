@@ -1,11 +1,17 @@
 """Custom exception handlers for the AI Analysis Service."""
 
+import logging
+import logging
 from http import HTTPStatus
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
+
+logger = logging.getLogger(__name__)
+
+logger = logging.getLogger(__name__)
 
 
 class AnalysisException(Exception):
@@ -110,6 +116,7 @@ async def validation_exception_handler(
     request: Request, exc: ValidationError
 ) -> JSONResponse:
     """Handle validation exceptions."""
+    logger.error("ValidationError: %s", exc)
     return JSONResponse(
         status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
         content={
@@ -120,16 +127,32 @@ async def validation_exception_handler(
     )
 
 
+async def http_exception_handler(
+    request: Request, exc: HTTPException
+) -> JSONResponse:
+    """Preserve FastAPI HTTPException status codes and details."""
+    logger.warning("HTTPException handled: %s %s", exc.status_code, exc.detail)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "message": exc.detail,
+            "error": exc.__class__.__name__,
+        },
+    )
+
+
 async def generic_exception_handler(
     request: Request, exc: Exception
 ) -> JSONResponse:
     """Handle generic exceptions."""
+    logger.exception("Unhandled exception while processing request")
     return JSONResponse(
         status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
         content={
             "success": False,
             "message": "An unexpected error occurred",
-            "error": str(exc),
+            "error": "InternalServerError",
         },
     )
 

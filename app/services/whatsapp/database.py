@@ -37,6 +37,10 @@ async def connect(mongodb_uri: str, database_name: str) -> AsyncIOMotorDatabase:
         logger.info("[DB] MongoDB connection established — database: %s", database_name)
     except Exception as e:
         logger.error("[DB] MongoDB ping failed: %s", e)
+        _client.close()
+        _client = None
+        _db = None
+        raise RuntimeError(f"MongoDB ping failed: {e}") from e
 
     return _db
 

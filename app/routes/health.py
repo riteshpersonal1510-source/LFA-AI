@@ -32,7 +32,7 @@ async def health_check(settings: Settings = Depends(get_settings)):
         "version": settings.app_version,
         "uptime": round(time.monotonic() - START_TIME, 3),
         "database": "ready" if settings.mongodb_uri else "not-configured",
-        "browser": "available",
+        "browser": "disabled" if settings.disable_x11_features else "available",
         "workers": 1,
         "playwright": "installed",
     }

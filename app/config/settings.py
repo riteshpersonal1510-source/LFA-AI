@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     
     # Backend settings
     backend_url: str = Field(default="http://localhost:5000")
+    frontend_url: Optional[str] = Field(default=None)
     
     # Analysis settings
     analysis_timeout: int = Field(default=30)

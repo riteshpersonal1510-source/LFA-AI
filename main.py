@@ -14,9 +14,8 @@ import time
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
 from app.config.settings import settings
 from app.core.exception_handlers import (
@@ -100,9 +99,7 @@ register_exception_handlers(app)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+        allow_origins=[settings.frontend_url] if settings.frontend_url else ["*"],
     allow_headers=["*"],
 )
 
@@ -111,19 +108,24 @@ app.include_router(analysis_router, prefix="/api/v1", tags=["analysis"])
 app.include_router(whatsapp_router, prefix="/api/v1", tags=["whatsapp"])
 
 
-def create_error_response(status_code: int, message: str) -> JSONResponse:
-    """Create a standardized error response."""
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "success": False,
-            "message": message,
-            "error": {
-                "code": status_code,
-                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            },
-        },
-    )
+@app.get("/", summary="Root health check")
+async def root_health() -> dict:
+    return {
+        "success": True,
+        "status": "healthy",
+        "service": settings.app_name,
+        "version": settings.app_version,
+    }
+
+
+@app.get("/health", summary="Root health check alias")
+async def root_health_alias():
+    return {
+        "success": True,
+        "status": "healthy",
+        "service": settings.app_name,
+        "version": settings.app_version,
+    }
 
 
 def handle_sigterm(signum, frame):
