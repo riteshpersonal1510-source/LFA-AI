@@ -110,6 +110,31 @@ class ScrapeResponse(BaseModel):
     errors: Optional[List[Dict[str, str]]] = None
 
 
+class ScrapeStartResponse(BaseModel):
+    success: bool
+    message: str
+    jobId: str
+    sessionId: str
+
+
+class ScrapeStatusData(BaseModel):
+    jobId: str
+    sessionId: str
+    status: str
+    message: Optional[str] = None
+    createdAt: Optional[str] = None
+    updatedAt: Optional[str] = None
+    startedAt: Optional[str] = None
+    completedAt: Optional[str] = None
+    result: Optional[ScrapeResponse] = None
+    error: Optional[str] = None
+
+
+class ScrapeStatusResponse(BaseModel):
+    success: bool
+    data: ScrapeStatusData
+
+
 class ProgressData(BaseModel):
     sessionId: str
     status: str  # running | completed | failed
