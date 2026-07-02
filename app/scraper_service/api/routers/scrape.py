@@ -260,6 +260,27 @@ async def browser_status():
 # Helpers
 # ---------------------------------------------------------------------------
 
+@router.get("/debug/routes", summary="Debug: List all available routes")
+async def debug_routes():
+    """Debug endpoint to list all available scraper routes."""
+    return {
+        "available_routes": [
+            "POST /api/v1/scrape - Main scraping endpoint",
+            "POST /api/v1/scraper/search - Compatibility alias", 
+            "POST /api/v1/search - Simple search alias",
+            "POST /api/v1/google-maps/search - Google Maps only",
+            "GET /api/v1/scraper/search-progress/{session_id} - Progress tracking",
+            "POST /api/v1/scrape/source/{source} - Single source scrape",
+            "GET /api/v1/browser/status - Browser pool status",
+            "GET /api/v1/debug/routes - This debug endpoint"
+        ],
+        "valid_sources": list(VALID_SOURCES),
+        "default_sources": DEFAULT_SOURCES,
+        "service": "scraper-router",
+        "status": "available"
+    }
+
+
 def _safe_lead(lead: dict) -> dict:
     """Map raw scraper dict → ScrapedLead-compatible dict."""
     allowed_keys = {

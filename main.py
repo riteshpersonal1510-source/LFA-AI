@@ -76,6 +76,12 @@ async def lifespan(app: FastAPI):
     logger.info(f"[BOOT] Backend URL: {settings.backend_url}")
     logger.info(f"[BOOT] Frontend URL: {settings.frontend_url or 'not set'}")
     logger.info(f"[BOOT] Scraper integrated: {SCRAPER_AVAILABLE}")
+    if not SCRAPER_AVAILABLE:
+        logger.warning("[BOOT] ⚠️  Scraper routes unavailable")
+        logger.info("[BOOT] Scraper import error: %s", _scraper_import_error)
+        logger.info("[BOOT] Available paths: %s", sys.path[:3])
+    else:
+        logger.info("[BOOT] ✅ Scraper routes will be registered")
 
     if SCRAPER_AVAILABLE and browser_pool is not None:
         await browser_pool.start()
@@ -121,14 +127,25 @@ async def lifespan(app: FastAPI):
         f"MONGODB_URI={settings.mongodb_uri[:30]}..."
     )
     logger.info("[BOOT] REGISTERED ROUTES:")
+    scraper_routes_count = 0
     for route in app.routes:
         if hasattr(route, "path") and hasattr(route, "methods"):
-            logger.info(f"[ROUTE] {' '.join(route.methods)} {route.path}")
-    logger.info(f"[BOOT] Router count: {len(app.routes)}")
-
-    logger.info("[BOOT] WhatsApp routes registered: ✓")
+            methods_str = ' '.join(sorted(route.methods or []))
+            logger.info(f"[ROUTE] {methods_str:<8} {route.path}")
+            if '/scrape' in route.path or '/search' in route.path:
+                scraper_routes_count += 1
+    logger.info(f"[BOOT] Total routes: {len(app.routes)}")
+    logger.info(f"[BOOT] Scraper routes: {scraper_routes_count}")
+    
     if SCRAPER_AVAILABLE:
-        logger.info("[BOOT] Scraper routes registered: ✓")
+        logger.info("[BOOT] ✅ Scraper routes registered successfully")
+        logger.info("[BOOT] Available endpoints:")
+        logger.info("[BOOT]   POST /api/v1/scrape")
+        logger.info("[BOOT]   POST /api/v1/search")  
+        logger.info("[BOOT]   GET  /api/v1/debug/routes")
+    else:
+        logger.warning("[BOOT] ❌ Scraper routes NOT available")
+        logger.info("[BOOT] Only AI analysis routes registered")
     logger.info(f"[BOOT] {settings.app_name} started successfully")
     logger.info("=" * 50)
     yield
@@ -172,12 +189,16 @@ async def root_health() -> dict:
         "status": "healthy",
         "service": settings.app_name,
         "version": settings.app_version,
-        "scraper": "available" if SCRAPER_AVAILABLE else "unavailable",
+        "mode": "unified_ai_and_scraper",
+        "scraper": "available" if SCRAPER_AVAILABLE else "unavailable", 
+        "scraper_import_error": _scraper_import_error if not SCRAPER_AVAILABLE else None,
         "endpoints": {
             "health": "/health",
             "analysis": "/api/v1/analyze-lead",
+            "whatsapp": "/api/v1/whatsapp/generate",
             "scrape": "/api/v1/scrape" if SCRAPER_AVAILABLE else None,
             "search": "/api/v1/search" if SCRAPER_AVAILABLE else None,
+            "debug": "/api/v1/debug/routes" if SCRAPER_AVAILABLE else None,
         },
     }
 
@@ -212,10 +233,12 @@ def main(host: Optional[str] = None, port: Optional[int] = None) -> None:
     from app.utils.logger import setup_logging
     setup_logging()
 
-    run_host = host or settings.host
-    run_port = int(port or os.getenv("PORT") or settings.port)
+    run_host = host or settings.host or "0.0.0.0"
+    run_port = int(port or os.getenv("PORT") or settings.port or 8000)
 
     logger.info(f"Starting server on {run_host}:{run_port}")
+    logger.info(f"Environment PORT: {os.getenv('PORT')}")
+    logger.info(f"Settings port: {settings.port}")
 
     import uvicorn
     uvicorn.run(
