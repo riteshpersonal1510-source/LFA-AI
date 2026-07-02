@@ -49,7 +49,8 @@ class GoogleMapsScraper(BaseScraper):
                 return leads;
                 }"""
             )
-            return cards[: max(5, ctx.max_results or 5)]
+            # Return all available results - no artificial limits
+            return cards
         except Exception as exc:  # noqa: BLE001
             await self._capture_failure_artifacts(ctx, exc, page)
             logger.error("{} discovery failed | error={}", self.name, exc)

@@ -33,7 +33,7 @@ class WebsiteScraper(BaseScraper):
         try:
             await page.goto(ctx.search_url, wait_until="domcontentloaded", timeout=NAV_TIMEOUT)
             await page.wait_for_timeout(2000)
-            results = await page.evaluate("""(maxLinks) => { const results=[]; const links=document.querySelectorAll('div.g a[href^="http"]'); for (const el of links){ if(results.length >= maxLinks) break; const href=el.getAttribute('href')||''; const text=el.textContent?.trim()||''; if(href && !href.includes('google.com')) { const h3=el.querySelector('h3'); results.push({url: href, title: h3?.textContent || text}); } } return results; }""", max(5, ctx.max_results or 5))
+            results = await page.evaluate("""() => { const results=[]; const links=document.querySelectorAll('div.g a[href^="http"]'); for (const el of links){ const href=el.getAttribute('href')||''; const text=el.textContent?.trim()||''; if(href && !href.includes('google.com')) { const h3=el.querySelector('h3'); results.push({url: href, title: h3?.textContent || text}); } } return results; }""")
             return self._filter_urls(results)
         except Exception as exc:  # noqa: BLE001
             await self._capture_failure_artifacts(ctx, exc, page)
@@ -47,7 +47,7 @@ class WebsiteScraper(BaseScraper):
         ctx.page = page
         leads: List[Dict[str, Any]] = []
         try:
-            for item in discovered[: max(3, ctx.max_results or 3)]:
+            for item in discovered:
                 url = item.get("url")
                 if not url:
                     continue
