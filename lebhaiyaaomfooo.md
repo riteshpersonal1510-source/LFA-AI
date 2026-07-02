@@ -2,6 +2,8 @@ git add .
 git commit -m "Accha - 2.0"
 git push
 
+Still i got this error :
+[python-scraper] Python scraper returned HTTP 404: {"detail":"Not Found"}
 Also you can changes creating updating modifying the /frontend /backend /ai-service folder with accurate output
 You are the lead software architect responsible for repairing this production application.
 
