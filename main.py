@@ -147,7 +147,7 @@ def main(host: Optional[str] = None, port: Optional[int] = None) -> None:
     setup_logging()
 
     run_host = host or settings.host
-    run_port = port or settings.port
+    run_port = int(port or os.getenv("PORT") or settings.port)
 
     logger.info(f"Starting server on {run_host}:{run_port}")
 
