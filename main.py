@@ -24,6 +24,7 @@ from app.core.exception_handlers import (
 )
 from app.core.middleware import register_middleware
 from app.routes import health_router, analysis_router, whatsapp_router
+from app.services.whatsapp.api import router as whatsapp_api_router
 from app.services.whatsapp.database import connect as db_connect, disconnect as db_disconnect
 
 # Configure logging
@@ -106,6 +107,7 @@ app.add_middleware(
 app.include_router(health_router, prefix="/api/v1", tags=["health"])
 app.include_router(analysis_router, prefix="/api/v1", tags=["analysis"])
 app.include_router(whatsapp_router, prefix="/api/v1", tags=["whatsapp"])
+app.include_router(whatsapp_api_router, prefix="/api/v1", tags=["whatsapp-api"])
 
 
 @app.get("/", summary="Root health check")
