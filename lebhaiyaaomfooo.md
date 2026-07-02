@@ -1,5 +1,5 @@
 git add .
-git commit -m "Accha - 2.0"
+git commit -m "Accha - 2.5"
 git push
 
 Still i got this error :

@@ -27,6 +27,29 @@ from app.routes import health_router, analysis_router, whatsapp_router
 from app.services.whatsapp.api import router as whatsapp_api_router
 from app.services.whatsapp.database import connect as db_connect, disconnect as db_disconnect
 
+# ---------------------------------------------------------------------------
+# Mount python-scraper package (sibling directory) for unified deployment
+# ---------------------------------------------------------------------------
+_AI_SERVICE_ROOT = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.dirname(_AI_SERVICE_ROOT)
+_PYTHON_SCRAPER_ROOT = os.path.join(_REPO_ROOT, "python-scraper")
+if os.path.isdir(_PYTHON_SCRAPER_ROOT) and _PYTHON_SCRAPER_ROOT not in sys.path:
+    sys.path.insert(0, _PYTHON_SCRAPER_ROOT)
+
+SCRAPER_AVAILABLE = False
+scrape_router = None
+browser_pool = None
+
+try:
+    from scraper_service.api.routers.scrape import router as scrape_router
+    from scraper_service.browser.browser_pool import browser_pool
+
+    SCRAPER_AVAILABLE = True
+except ImportError as import_err:
+    scrape_router = None
+    browser_pool = None
+    _scraper_import_error = str(import_err)
+
 # Configure logging
 logging.basicConfig(
     level=settings.log_level.upper(),
@@ -43,6 +66,17 @@ async def lifespan(app: FastAPI):
     logger.info(f"[BOOT] Host: {settings.host}:{settings.port}")
     logger.info(f"[BOOT] MongoDB URI: {settings.mongodb_uri[:30]}...")
     logger.info(f"[BOOT] Backend URL: {settings.backend_url}")
+    logger.info(f"[BOOT] Frontend URL: {settings.frontend_url or 'not set'}")
+    logger.info(f"[BOOT] Scraper integrated: {SCRAPER_AVAILABLE}")
+
+    if SCRAPER_AVAILABLE and browser_pool is not None:
+        await browser_pool.start()
+        logger.info("[BOOT] Playwright browser pool started ✓")
+    elif not SCRAPER_AVAILABLE:
+        logger.warning(
+            "[BOOT] Scraper routes unavailable — %s",
+            globals().get("_scraper_import_error", "python-scraper package not found"),
+        )
 
     # Run X11 diagnostics only if not disabled
     if not settings.disable_x11_features:
@@ -73,18 +107,27 @@ async def lifespan(app: FastAPI):
         logger.info("[BOOT] WhatsApp template service initialized — templates loaded from MongoDB")
     logger.info("[BOOT] WhatsApp engine database initialized")
 
-    logger.info(f"[BOOT] BACKEND_URL={settings.backend_url} PORT={settings.port} HOST={settings.host} DEBUG={settings.debug} MONGODB_URI={settings.mongodb_uri[:30]}...")
-    # Log all registered routes
+    logger.info(
+        f"[BOOT] BACKEND_URL={settings.backend_url} PORT={settings.port} "
+        f"HOST={settings.host} DEBUG={settings.debug} "
+        f"MONGODB_URI={settings.mongodb_uri[:30]}..."
+    )
+    logger.info("[BOOT] REGISTERED ROUTES:")
     for route in app.routes:
         if hasattr(route, "path") and hasattr(route, "methods"):
             logger.info(f"[ROUTE] {' '.join(route.methods)} {route.path}")
     logger.info(f"[BOOT] Router count: {len(app.routes)}")
 
     logger.info("[BOOT] WhatsApp routes registered: ✓")
+    if SCRAPER_AVAILABLE:
+        logger.info("[BOOT] Scraper routes registered: ✓")
     logger.info(f"[BOOT] {settings.app_name} started successfully")
     logger.info("=" * 50)
     yield
     logger.info("[SHUTDOWN] AI Analysis Service shutting down...")
+    if SCRAPER_AVAILABLE and browser_pool is not None:
+        logger.info("[SHUTDOWN] Closing browser pool...")
+        await browser_pool.shutdown()
     await db_disconnect()
     logger.info("[SHUTDOWN] Service shutdown complete")
 
@@ -110,6 +153,8 @@ app.include_router(health_router, prefix="/api/v1", tags=["health"])
 app.include_router(analysis_router, prefix="/api/v1", tags=["analysis"])
 app.include_router(whatsapp_router, prefix="/api/v1", tags=["whatsapp"])
 app.include_router(whatsapp_api_router, prefix="/api/v1", tags=["whatsapp-api"])
+if SCRAPER_AVAILABLE and scrape_router is not None:
+    app.include_router(scrape_router, prefix="/api/v1", tags=["scrape"])
 
 
 @app.get("/", summary="Root health check")
@@ -119,6 +164,13 @@ async def root_health() -> dict:
         "status": "healthy",
         "service": settings.app_name,
         "version": settings.app_version,
+        "scraper": "available" if SCRAPER_AVAILABLE else "unavailable",
+        "endpoints": {
+            "health": "/health",
+            "analysis": "/api/v1/analyze-lead",
+            "scrape": "/api/v1/scrape" if SCRAPER_AVAILABLE else None,
+            "search": "/api/v1/search" if SCRAPER_AVAILABLE else None,
+        },
     }
 
 
