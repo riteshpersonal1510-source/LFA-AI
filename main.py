@@ -73,10 +73,12 @@ async def lifespan(app: FastAPI):
         logger.info("[BOOT] WhatsApp template service initialized — templates loaded from MongoDB")
     logger.info("[BOOT] WhatsApp engine database initialized")
 
+    logger.info(f"[BOOT] BACKEND_URL={settings.backend_url} PORT={settings.port} HOST={settings.host} DEBUG={settings.debug} MONGODB_URI={settings.mongodb_uri[:30]}...")
     # Log all registered routes
     for route in app.routes:
         if hasattr(route, "path") and hasattr(route, "methods"):
             logger.info(f"[ROUTE] {' '.join(route.methods)} {route.path}")
+    logger.info(f"[BOOT] Router count: {len(app.routes)}")
 
     logger.info("[BOOT] WhatsApp routes registered: ✓")
     logger.info(f"[BOOT] {settings.app_name} started successfully")
