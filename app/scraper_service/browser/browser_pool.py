@@ -112,10 +112,10 @@ class BrowserPool:
     ) -> Tuple[Page, BrowserContext, Browser]:
         """Return a new page inside a pooled browser context."""
         async with self._lock:
-            pb = self._find_idle(browser_type) or await self._launch(browser_type)
-
-        if pb is None:
-            raise RuntimeError("BrowserPool: could not acquire a browser instance")
+            pb = self._find_idle(browser_type)
+            if pb is None:
+                # This will now raise with the original Playwright exception if launch fails
+                pb = await self._launch(browser_type)
 
         pb.in_use = True
         pb.last_used = time.time()
@@ -220,8 +220,10 @@ class BrowserPool:
             )
             return pb
         except Exception as exc:
-            logger.error("BrowserPool: launch failed — {}", exc)
-            return None
+            # Log the original exception with full details
+            logger.error("BrowserPool: {} launch failed: {} - {}", browser_type, type(exc).__name__, str(exc))
+            # Re-raise with original exception details preserved
+            raise RuntimeError(f"BrowserPool: failed to launch {browser_type}: {type(exc).__name__}: {str(exc)}") from exc
 
     async def _setup_route_blocking(self, page: Page) -> None:
         async def handle_route(route):

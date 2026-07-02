@@ -112,6 +112,18 @@ async def lifespan(app: FastAPI):
     if SCRAPER_AVAILABLE and browser_pool is not None:
         await browser_pool.start()
         logger.info("[BOOT] Playwright browser pool started ✓")
+        
+        # Verify Chromium can be launched (startup health check)
+        try:
+            logger.info("[BOOT] Verifying Chromium installation...")
+            page, context, browser = await browser_pool.acquire("startup-test")
+            await browser_pool.release(page, "startup-test")
+            logger.info("[BOOT] ✅ Chromium verification successful")
+        except Exception as e:
+            logger.error("[BOOT] ❌ Chromium verification failed: {} - {}", type(e).__name__, str(e))
+            logger.error("[BOOT] Browser startup test failed - scraping will not work")
+            # Don't crash the app, but log clearly that scraping won't work
+            
     elif not SCRAPER_AVAILABLE:
         logger.warning(
             "[BOOT] Scraper routes unavailable — %s",
@@ -244,6 +256,45 @@ async def debug_scraper() -> dict:
         "python_scraper_root": _PYTHON_SCRAPER_ROOT,
         "scraper_service_exists": os.path.exists(os.path.join(_APP_ROOT, "scraper_service")),
     }
+
+
+@app.get("/debug/browser", summary="Debug browser and Playwright status")
+async def debug_browser() -> dict:
+    """Debug endpoint to check browser pool and Playwright status."""
+    if not SCRAPER_AVAILABLE:
+        return {
+            "scraper_available": False,
+            "browser_status": "scraper_not_available",
+            "error": _scraper_import_error
+        }
+    
+    try:
+        from scraper_service.browser.browser_pool import browser_pool
+        
+        status = {
+            "scraper_available": True,
+            "browser_pool_started": browser_pool._started,
+            "pool_status": browser_pool.get_status(),
+            "playwright_available": browser_pool._playwright is not None,
+        }
+        
+        # Try to acquire a browser to test functionality
+        try:
+            page, context, browser = await browser_pool.acquire("health-check")
+            await browser_pool.release(page, "health-check")
+            status["browser_launch_test"] = "success"
+        except Exception as e:
+            status["browser_launch_test"] = "failed"
+            status["browser_launch_error"] = f"{type(e).__name__}: {str(e)}"
+            
+        return status
+        
+    except Exception as e:
+        return {
+            "scraper_available": False,
+            "browser_status": "error",
+            "error": f"{type(e).__name__}: {str(e)}"
+        }
 
 
 @app.get("/health", summary="Root health check alias")
