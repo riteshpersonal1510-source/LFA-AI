@@ -94,6 +94,7 @@ except Exception as e:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global SCRAPER_AVAILABLE
     logger.info("=" * 50)
     logger.info(f"[BOOT] Starting {settings.app_name} v{settings.app_version}")
     logger.info(f"[BOOT] Environment: {settings.debug and 'development' or 'production'}")
