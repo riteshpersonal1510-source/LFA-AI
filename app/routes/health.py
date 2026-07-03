@@ -57,6 +57,7 @@ async def health_check(settings: Settings = Depends(get_settings)):
 
 
 @router.get("/ready")
+@router.get("/readiness")
 async def readiness_check(settings: Settings = Depends(get_settings)):
     """
     Readiness check endpoint.
@@ -83,4 +84,13 @@ async def startup_check(settings: Settings = Depends(get_settings)):
         "status": "started",
         "service": "lead-finder-ai-analysis",
         "version": settings.app_version,
+    }
+
+
+@router.get("/liveness")
+async def liveness_check(settings: Settings = Depends(get_settings)):
+    """Liveness check endpoint."""
+    return {
+        "status": "alive",
+        "service": "lead-finder-ai-analysis",
     }

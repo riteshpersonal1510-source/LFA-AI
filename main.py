@@ -101,6 +101,18 @@ async def lifespan(app: FastAPI):
     logger.info(f"[BOOT] MongoDB URI: {settings.mongodb_uri[:30]}...")
     logger.info(f"[BOOT] Backend URL: {settings.backend_url}")
     logger.info(f"[BOOT] Frontend URL: {settings.frontend_url or 'not set'}")
+    
+    # Environment Variable Validation
+    if not settings.mongodb_uri or "localhost" in settings.mongodb_uri:
+        if not settings.debug:
+            logger.error("❌ CRITICAL: MONGODB_URI is missing or set to localhost in production!")
+            sys.exit(1)
+            
+    if not settings.backend_url or "localhost" in settings.backend_url:
+        if not settings.debug:
+            logger.error("❌ CRITICAL: BACKEND_URL is missing or set to localhost in production!")
+            sys.exit(1)
+
     logger.info(f"[BOOT] Scraper integrated: {SCRAPER_AVAILABLE}")
     if not SCRAPER_AVAILABLE:
         logger.warning("[BOOT] ⚠️  Scraper routes unavailable")
