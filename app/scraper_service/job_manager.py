@@ -85,6 +85,15 @@ class JobManager:
                 return
             job.new_leads.append(lead)
 
+    def heartbeat(self, job_id: str, stage: Optional[str] = None) -> None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if not job:
+                return
+            job.updated_at = time.time()
+            if stage:
+                job.message = stage
+
     def consume_leads(self, job_id: str) -> List[Dict[str, Any]]:
         with self._lock:
             job = self._jobs.get(job_id)

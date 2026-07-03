@@ -194,6 +194,7 @@ async def start_scrape(request: ScrapeRequest) -> ScrapeStartResponse:
             saved=int(payload.get("saved") or 0),
             failed=int(payload.get("failed") or 0),
         )
+        job_manager.heartbeat(job_id, stage=payload.get("status") or "Scraping in progress")
         
         async def process_progress():
             try:
