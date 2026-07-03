@@ -123,31 +123,18 @@ async def lifespan(app: FastAPI):
         logger.info("[BOOT] ✅ Scraper routes will be registered")
 
     if SCRAPER_AVAILABLE and browser_pool is not None:
-        # Validate Chromium installation without launching it
-        import os
-        playwright_cache = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", os.path.join(os.getcwd(), "playwright-browsers"))
-        
         # Override environment variable so Playwright natively knows where to look at runtime!
+        playwright_cache = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", os.path.join(os.getcwd(), "playwright-browsers"))
         os.environ["PLAYWRIGHT_BROWSERS_PATH"] = playwright_cache
         
-        chromium_found = False
-        if os.path.exists(playwright_cache) and os.path.isdir(playwright_cache):
-            for item in os.listdir(playwright_cache):
-                if "chromium" in item.lower() and os.path.isdir(os.path.join(playwright_cache, item)):
-                    chromium_found = True
-                    break
-        
-        # In local dev (Windows), playwright installs to local AppData. We relax the check if not on Render.
-        is_render = "RENDER" in os.environ
-        if is_render and not chromium_found:
-            logger.error(f"[BOOT] ❌ Chromium executable NOT FOUND in {playwright_cache}!")
-            logger.error("[BOOT] Render Build Command MUST be set to: ./build-improved.sh")
-            logger.error("[BOOT] Disabling scraper engine to prevent crash loops.")
-            SCRAPER_AVAILABLE = False
-        else:
+        try:
             await browser_pool.start()
             logger.info("[BOOT] Playwright browser pool configured ✓")
             logger.info("[BOOT] Chromium will be launched on-demand when scraping begins")
+        except Exception as e:
+            logger.error(f"[BOOT] ❌ Failed to start BrowserPool: {str(e)}")
+            logger.error("[BOOT] Disabling scraper engine to prevent crash loops.")
+            SCRAPER_AVAILABLE = False
     elif not SCRAPER_AVAILABLE:
         logger.warning(
             "[BOOT] Scraper routes unavailable — %s",
