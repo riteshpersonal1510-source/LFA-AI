@@ -37,7 +37,7 @@ export PLAYWRIGHT_BROWSERS_PATH=/opt/render/.cache/ms-playwright
 echo "📍 PLAYWRIGHT_BROWSERS_PATH set to: $PLAYWRIGHT_BROWSERS_PATH"
 
 # Verify Playwright is installed
-python -c "import playwright; print(f'Playwright {playwright.__version__} installed')" || {
+python -c "import playwright; print('Playwright installed')" || {
     echo "❌ Playwright not properly installed"
     exit 1
 }

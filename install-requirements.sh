@@ -19,7 +19,7 @@ playwright install chromium
 
 echo "Verifying installations..."
 python -c "import fastapi; print(f'FastAPI: {fastapi.__version__}')" 2>/dev/null || echo "FastAPI check failed"
-python -c "import playwright; print(f'Playwright: {playwright.__version__}')" 2>/dev/null || echo "Playwright check failed"
+python -c "import playwright; print('Playwright: installed')" 2>/dev/null || echo "Playwright check failed"
 python -c "import pydantic; print(f'Pydantic: {pydantic.__version__}')" 2>/dev/null || echo "Pydantic check failed"
 
 echo "Local installation complete!"
