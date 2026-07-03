@@ -32,8 +32,8 @@ echo "✅ Python dependencies installed"
 # Step 2: Install Playwright browsers
 echo "🎭 Installing Playwright browsers..."
 
-# Set Playwright cache directory for Render
-export PLAYWRIGHT_BROWSERS_PATH=/opt/render/.cache/ms-playwright
+# Set Playwright path inside the project directory so Render copies it to the runtime container
+export PLAYWRIGHT_BROWSERS_PATH=$PWD/playwright-browsers
 echo "📍 PLAYWRIGHT_BROWSERS_PATH set to: $PLAYWRIGHT_BROWSERS_PATH"
 
 # Verify Playwright is installed
@@ -66,7 +66,7 @@ try:
         print(f'❌ Chromium executable missing at: {chromium_path}')
         
         # Debug: List Playwright cache
-        cache_dir = '/opt/render/.cache/ms-playwright'
+        cache_dir = os.environ.get('PLAYWRIGHT_BROWSERS_PATH', os.path.join(os.getcwd(), 'playwright-browsers'))
         if os.path.exists(cache_dir):
             print('📂 Playwright cache contents:')
             for item in os.listdir(cache_dir):

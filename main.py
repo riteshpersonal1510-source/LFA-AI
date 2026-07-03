@@ -125,7 +125,11 @@ async def lifespan(app: FastAPI):
     if SCRAPER_AVAILABLE and browser_pool is not None:
         # Validate Chromium installation without launching it
         import os
-        playwright_cache = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "/opt/render/.cache/ms-playwright")
+        playwright_cache = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", os.path.join(os.getcwd(), "playwright-browsers"))
+        
+        # Override environment variable so Playwright natively knows where to look at runtime!
+        os.environ["PLAYWRIGHT_BROWSERS_PATH"] = playwright_cache
+        
         chromium_found = False
         if os.path.exists(playwright_cache) and os.path.isdir(playwright_cache):
             for item in os.listdir(playwright_cache):
