@@ -15,7 +15,7 @@ cd ai-service && python -m uvicorn main:app --host 0.0.0.0 --port $PORT
 ### Environment Variables
 - `BROWSER_HEADLESS=true` (required for production)
 - `BROWSER_MAX_POOL_SIZE=3` (default, adjust based on memory)
-- `PLAYWRIGHT_BROWSERS_PATH=0` (use system path)
+- `PLAYWRIGHT_BROWSERS_PATH=./playwright-browsers` (project-local, persists after build)
 - `LOG_LEVEL=INFO`
 
 ## Critical Requirements

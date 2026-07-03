@@ -11,6 +11,15 @@ import os
 import signal
 import sys
 import time
+
+# CRITICAL: Set PLAYWRIGHT_BROWSERS_PATH before ANY other imports.
+# Render deletes /opt/render/.cache/ after build. Force project-local path.
+_pw_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")
+if not _pw_path or _pw_path == "0" or ".cache" in _pw_path:
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "playwright-browsers"
+    )
+
 from contextlib import asynccontextmanager
 from typing import Optional
 
