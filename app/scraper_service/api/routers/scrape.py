@@ -194,6 +194,21 @@ async def start_scrape(request: ScrapeRequest) -> ScrapeStartResponse:
             saved=int(payload.get("saved") or 0),
             failed=int(payload.get("failed") or 0),
         )
+        
+        async def process_progress():
+            try:
+                from app.config.settings import settings
+                import httpx
+                
+                backend_url = settings.backend_url or "http://localhost:5001"
+                webhook_url = f"{backend_url.rstrip('/')}/api/v1/internal/emit"
+                
+                async with httpx.AsyncClient() as client:
+                    await client.post(webhook_url, json={"event": "search:progress", "sessionId": session_id, "data": payload}, timeout=2.0)
+            except Exception:
+                pass
+                
+        asyncio.create_task(process_progress())
 
     def on_lead(lead: dict) -> None:
         session_manager.update(
@@ -203,6 +218,34 @@ async def start_scrape(request: ScrapeRequest) -> ScrapeStartResponse:
             processed=session_manager.get(session_id).processed + 1 if session_manager.get(session_id) else 1,
         )
         job_manager.add_lead(job_id, lead)
+
+        # Immediate processing: MongoDB Insert & Socket Emit
+        async def process_streamed_lead(lead_copy: dict):
+            try:
+                from app.services.whatsapp.database import get_db
+                from app.config.settings import settings
+                import httpx
+                
+                lead_copy['sessionId'] = session_id
+                
+                # 1. MongoDB Save
+                db = get_db()
+                if db is not None:
+                    filter_query = {"placeId": lead_copy.get("placeId")} if lead_copy.get("placeId") else {"companyName": lead_copy.get("companyName")}
+                    await db.leads.update_one(filter_query, {"$set": lead_copy}, upsert=True)
+
+                # 2. Webhook Emit
+                backend_url = settings.backend_url or "http://localhost:5001"
+                webhook_url = f"{backend_url.rstrip('/')}/api/v1/internal/emit"
+                
+                async with httpx.AsyncClient() as client:
+                    await client.post(webhook_url, json={"event": "search:live-lead", "sessionId": session_id, "data": lead_copy}, timeout=5.0)
+                    await client.post(webhook_url, json={"event": "search:saved-lead", "sessionId": session_id, "data": lead_copy}, timeout=5.0)
+                    
+            except Exception as e:
+                logger.error(f"Failed to process streamed lead immediately: {e}")
+                
+        asyncio.create_task(process_streamed_lead(dict(lead)))
 
     async def run_background() -> ScrapeResponse:
         try:

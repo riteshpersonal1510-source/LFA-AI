@@ -101,11 +101,36 @@ class JustDialScraper(BaseScraper):
 
     async def scrape(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         ctx = self._coerce_context(*args, **kwargs)
+        on_lead = kwargs.get('on_lead')
+        on_progress = kwargs.get('on_progress')
         try:
             discovered = await self._run_with_retries(ctx, self.discover)
             extracted = await self.extract(ctx, discovered)
             enriched = await self.enrich(ctx, extracted)
-            return {"success": bool(enriched), "source": self.name, "total_extracted": len(enriched), "total_stored": len(enriched), "total_duplicates": 0, "leads": enriched}
+            
+            # Stream leads natively
+            processed = 0
+            for lead in enriched:
+                processed += 1
+                if on_lead:
+                    on_lead(lead)
+                if on_progress:
+                    on_progress({
+                        "found": processed,
+                        "processed": processed,
+                        "total": len(enriched),
+                        "currentBusiness": lead.get('companyName', ''),
+                        "source": self.name
+                    })
+            
+            return {
+                "success": bool(enriched), 
+                "source": self.name, 
+                "total_extracted": len(enriched), 
+                "total_stored": len(enriched), 
+                "total_duplicates": 0, 
+                "leads": enriched
+            }
         except Exception as exc:  # noqa: BLE001
             logger.error("{} scrape failed | error={}", self.name, exc)
             return {"success": False, "source": self.name, "total_extracted": 0, "total_stored": 0, "total_duplicates": 0, "leads": [], "error": str(exc)}

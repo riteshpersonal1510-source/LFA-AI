@@ -144,12 +144,7 @@ class GoogleMapsScraper(BaseScraper):
                         pid = card.get('placeId') or card.get('companyName')
                         processed_place_ids.add(pid)
                         
-                        # Navigate back to list if we are in a detail view
-                        current_url = page.url
-                        if '/place/' in current_url:
-                            await page.go_back(wait_until="domcontentloaded", timeout=5000)
-                            await page.wait_for_timeout(1000)
-
+                        # Remove the old go_back logic here since we handle it safely in _extract_business_with_retry
                         try:
                             # Extract details
                             detailed_lead = await self._extract_business_with_retry(page, card, card['cardIndex'], data_quality)
@@ -267,9 +262,16 @@ class GoogleMapsScraper(BaseScraper):
     ) -> Dict[str, Any]:
         """Extract business details with retry logic and fallback strategies."""
         try:
-            # Navigate back to search results if not on first card
-            if index > 0:
-                await page.go_back(wait_until="domcontentloaded", timeout=5000)
+            # Safe navigation back to search results if we are inside a detail view
+            if '/place/' in page.url or '/dir/' in page.url:
+                try:
+                    close_btn = await page.query_selector('button[aria-label*="Back"], button[aria-label*="Close"]')
+                    if close_btn and await close_btn.is_visible():
+                        await close_btn.click(timeout=3000)
+                    else:
+                        await page.go_back(wait_until="domcontentloaded", timeout=5000)
+                except Exception:
+                    await page.go_back(wait_until="domcontentloaded", timeout=5000)
                 await page.wait_for_timeout(1000)
             
             # Click on the business card to open detail panel
