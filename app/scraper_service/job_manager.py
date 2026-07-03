@@ -1,7 +1,7 @@
 """Async scrape job manager for the AI service scraper router."""
 
 from __future__ import annotations
-
+import pandas as pd
 import asyncio
 import threading
 import time
