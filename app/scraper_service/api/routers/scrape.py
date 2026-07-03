@@ -202,6 +202,7 @@ async def start_scrape(request: ScrapeRequest) -> ScrapeStartResponse:
             current_source=str(lead.get("source") or ""),
             processed=session_manager.get(session_id).processed + 1 if session_manager.get(session_id) else 1,
         )
+        job_manager.add_lead(job_id, lead)
 
     async def run_background() -> ScrapeResponse:
         try:
@@ -254,10 +255,14 @@ async def start_scrape(request: ScrapeRequest) -> ScrapeStartResponse:
     summary="Get async scrape job status",
     description="Poll async scrape job status by jobId.",
 )
-async def get_scrape_status(job_id: str) -> ScrapeStatusResponse:
+async def get_scrape_status(job_id: str, consume_leads: bool = False) -> ScrapeStatusResponse:
     job = job_manager.get_job(job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    new_leads = []
+    if consume_leads:
+        new_leads = job_manager.consume_leads(job_id)
 
     return ScrapeStatusResponse(
         success=True,
@@ -272,6 +277,7 @@ async def get_scrape_status(job_id: str) -> ScrapeStatusResponse:
             "completedAt": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(job.completed_at)) if job.completed_at else None,
             "result": job.result,
             "error": job.error,
+            "newLeads": new_leads,
         },
     )
 

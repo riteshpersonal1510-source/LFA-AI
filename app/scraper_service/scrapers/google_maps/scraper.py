@@ -51,10 +51,31 @@ class GoogleMapsScraper(BaseScraper):
     browser_type = "chromium"
     timeout_s = 60
     max_retries = 2
-    async def discover(self, ctx: ScrapeContext) -> List[Dict[str, Any]]:
-        """Discover businesses with enforced 20-lead limit."""
-        if not await self.validate(ctx):
-            return []
+    async def scrape(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Override base scrape to implement robust scrolling and real-time streaming."""
+        ctx = self._coerce_context(*args, **kwargs)
+        on_lead = kwargs.get("on_lead")
+        on_progress = kwargs.get("on_progress")
+        
+        data_quality = DataQuality(
+            fieldsAttempted=EXTRACTION_FIELDS,
+            fieldsPopulated={field: 0 for field in EXTRACTION_FIELDS},
+            fillRatePercent={field: 0.0 for field in EXTRACTION_FIELDS},
+            totalLeads=0,
+            extractionWarnings=[]
+        )
+        ctx.metadata['dataQuality'] = data_quality.dict()
+        
+        try:
+            from ..website.scraper import WebsiteScraper
+            website_scraper = WebsiteScraper()
+        except ImportError:
+            website_scraper = None
+            logger.warning("Could not import WebsiteScraper for email extraction")
+
+        processed_place_ids = set()
+        detailed_leads = []
+        limit = ctx.max_results or MAX_LEADS_PER_SEARCH
         
         query = ctx.business_type or ctx.keyword
         location = ctx.location or ctx.city or ctx.state or ctx.country or ""
@@ -66,112 +87,174 @@ class GoogleMapsScraper(BaseScraper):
         
         try:
             await page.goto(ctx.search_url, wait_until="domcontentloaded", timeout=30_000)
-            await page.wait_for_timeout(2500)
+            await page.wait_for_timeout(3000)
             
-            # Check for Google blocking first
             if await self._is_google_blocked(page):
                 logger.warning("GOOGLE_BLOCKED: Detected CAPTCHA or unusual traffic page")
-                return []
-            
-            # Get initial card list
-            cards = await page.evaluate(
-                """() => {
-                const selectors = ['div.Nv2PK', 'div[role="article"]'];
-                const elements = [];
-                for (const sel of selectors) {
-                    const found = document.querySelectorAll(sel);
-                    if (found.length > 0) { elements.push(...Array.from(found)); break; }
-                }
-                const leads = [];
-                for (const card of elements) {
-                    const nameEl = card.querySelector('.fontHeadlineSmall, div.qBF1Pd, div.fontHeadlineSmall');
-                    const name = nameEl?.textContent?.trim() || '';
-                    if (!name) continue;
-                    const link = card.querySelector('a.hfpxzc');
-                    const href = link?.getAttribute('href') || '';
-                    const pidMatch = href.match(/maps\\/place\\/([^/]+)/);
-                    const placeId = pidMatch ? decodeURIComponent(pidMatch[1]) : '';
-                    leads.push({ 
-                        companyName: name, 
-                        sourceUrl: href, 
-                        placeId, 
-                        source: 'google-maps', 
-                        cardIndex: leads.length 
-                    });
-                }
-                return leads;
-                }"""
-            )
-            
-            if not cards:
-                logger.warning("No cards found for query: {}", search_query)
-                return []
-            
-            # Enforce hard 20-lead limit
-            effective_limit = min(ctx.max_results or MAX_LEADS_PER_SEARCH, MAX_LEADS_PER_SEARCH)
-            cards_to_process = cards[:effective_limit]
-            
-            logger.info(
-                "Found {} cards, processing {} (limit={})", 
-                len(cards), 
-                len(cards_to_process),
-                effective_limit
-            )
-            # Extract detailed information for each business with rate limiting
-            detailed_leads = []
-            data_quality = DataQuality(
-                fieldsAttempted=EXTRACTION_FIELDS,
-                fieldsPopulated={field: 0 for field in EXTRACTION_FIELDS},
-                fillRatePercent={field: 0.0 for field in EXTRACTION_FIELDS},
-                totalLeads=len(cards_to_process),
-                extractionWarnings=[]
-            )
-            
-            for i, card in enumerate(cards_to_process):
-                try:
-                    # Rate limiting: randomized delay between businesses
-                    if i > 0:
-                        delay = random.uniform(DETAIL_PANEL_DELAY_MIN, DETAIL_PANEL_DELAY_MAX)
-                        await asyncio.sleep(delay)
+                return {"success": False, "source": self.name, "total_extracted": 0, "total_stored": 0, "leads": [], "error": "Google blocked access"}
+
+            consecutive_no_new_cards = 0
+            scroll_attempts = 0
+            last_card_count = 0
+
+            while len(detailed_leads) < limit:
+                # Get visible cards
+                cards = await page.evaluate(
+                    """() => {
+                    const selectors = ['div.Nv2PK', 'div[role="article"]'];
+                    const elements = [];
+                    for (const sel of selectors) {
+                        const found = document.querySelectorAll(sel);
+                        if (found.length > 0) { elements.push(...Array.from(found)); break; }
+                    }
+                    const leads = [];
+                    for (const card of elements) {
+                        const nameEl = card.querySelector('.fontHeadlineSmall, div.qBF1Pd, div.fontHeadlineSmall');
+                        const name = nameEl?.textContent?.trim() || '';
+                        if (!name) continue;
+                        const link = card.querySelector('a.hfpxzc');
+                        const href = link?.getAttribute('href') || '';
+                        const pidMatch = href.match(/maps\\/place\\/([^/]+)/);
+                        const placeId = pidMatch ? decodeURIComponent(pidMatch[1]) : '';
+                        leads.push({ companyName: name, sourceUrl: href, placeId, source: 'google-maps' });
+                    }
+                    return leads;
+                    }"""
+                )
+                
+                # Filter new cards
+                new_cards = []
+                for idx, card in enumerate(cards):
+                    pid = card.get('placeId') or card.get('companyName')
+                    if pid and pid not in processed_place_ids:
+                        card['cardIndex'] = idx
+                        new_cards.append(card)
+                
+                if not new_cards:
+                    consecutive_no_new_cards += 1
+                    logger.debug("No new cards found on scroll attempt {}", scroll_attempts + 1)
+                else:
+                    consecutive_no_new_cards = 0
                     
-                    # Extract with retry and fallback
-                    detailed_lead = await self._extract_business_with_retry(page, card, i, data_quality)
-                    if detailed_lead:
-                        detailed_leads.append(detailed_lead)
-                        logger.debug("Extracted details for: {}", detailed_lead.get('companyName', 'Unknown'))
-                    
-                    # Check for blocking after each extraction
-                    if await self._is_google_blocked(page):
-                        logger.warning(
-                            "GOOGLE_BLOCKED: Stopping batch at {} of {} leads due to blocking", 
-                            i + 1, 
-                            len(cards_to_process)
-                        )
-                        break
+                    # Process new cards
+                    for card in new_cards:
+                        if len(detailed_leads) >= limit:
+                            break
+                            
+                        pid = card.get('placeId') or card.get('companyName')
+                        processed_place_ids.add(pid)
                         
+                        # Navigate back to list if we are in a detail view
+                        current_url = page.url
+                        if '/place/' in current_url:
+                            await page.go_back(wait_until="domcontentloaded", timeout=5000)
+                            await page.wait_for_timeout(1000)
+
+                        try:
+                            # Extract details
+                            detailed_lead = await self._extract_business_with_retry(page, card, card['cardIndex'], data_quality)
+                            
+                            # Inherit search context
+                            detailed_lead["searchedKeyword"] = ctx.keyword
+                            detailed_lead["searchedLocation"] = location or None
+                            detailed_lead["searchedCity"] = ctx.city
+                            detailed_lead["searchedState"] = ctx.state
+                            detailed_lead["searchedCountry"] = ctx.country
+                            detailed_lead["fullSearchQuery"] = ctx.search_url or None
+                            detailed_lead["businessType"] = ctx.business_type or ctx.keyword
+                            
+                            # Website extraction (enrich inline)
+                            if detailed_lead.get("website") and website_scraper:
+                                try:
+                                    email = await website_scraper.extract_email_from_website(detailed_lead["website"])
+                                    detailed_lead["email"] = email
+                                except Exception as e:
+                                    detailed_lead["email"] = None
+                            else:
+                                detailed_lead["email"] = None
+                                
+                            detailed_lead["leadScore"] = calculate_lead_score(detailed_lead)
+                            normalized_lead = self._normalize_lead(detailed_lead)
+                            
+                            # Data validation: discard if totally empty
+                            if not normalized_lead.get('companyName') or normalized_lead.get('companyName') == 'Unknown':
+                                if not normalized_lead.get('phone') and not normalized_lead.get('website'):
+                                    continue
+
+                            detailed_leads.append(normalized_lead)
+                            data_quality.totalLeads += 1
+                            
+                            # Stream lead
+                            if on_lead:
+                                on_lead(normalized_lead)
+                                
+                            # Stream progress
+                            if on_progress:
+                                on_progress({
+                                    "found": len(detailed_leads),
+                                    "processed": len(detailed_leads),
+                                    "total": limit,
+                                    "currentBusiness": normalized_lead.get('companyName', ''),
+                                    "source": self.name
+                                })
+                                
+                        except Exception as e:
+                            logger.warning("Error extracting details for business {}: {}", card.get('companyName', 'Unknown'), str(e))
+                            
+                # Scroll Logic
+                scroll_attempts += 1
+                if len(detailed_leads) >= limit:
+                    break
+                    
+                if consecutive_no_new_cards >= 3:
+                    logger.info("Reached end of results after {} leads", len(detailed_leads))
+                    break
+                    
+                try:
+                    # Focus the sidebar and press PageDown or scroll
+                    sidebar = await page.query_selector('div[role="feed"]')
+                    if sidebar:
+                        await sidebar.hover()
+                        await page.mouse.wheel(0, 10000)
+                    else:
+                        await page.keyboard.press("PageDown")
+                        await page.keyboard.press("PageDown")
+                    await page.wait_for_timeout(2000)
+                    
+                    # Check for "You've reached the end of the list"
+                    end_text = await page.evaluate("() => document.body.innerText.includes(\"You've reached the end of the list\")")
+                    if end_text:
+                        logger.info("Google Maps indicated end of list.")
+                        break
                 except Exception as e:
-                    logger.warning(
-                        "Error extracting details for business {}: {} - {}", 
-                        i, 
-                        card.get('companyName', 'Unknown'), 
-                        str(e)
-                    )
-                    # Keep basic info on error
-                    detailed_leads.append(card)
-            
-            # Calculate and log data quality metrics
+                    logger.debug("Scroll failed: {}", str(e))
+                    break
+
             self._calculate_data_quality_metrics(data_quality)
             self._log_data_quality_results(data_quality)
-            
-            # Store data quality for response
             ctx.metadata['dataQuality'] = data_quality.dict()
             
-            return detailed_leads
+            return {
+                "success": len(detailed_leads) > 0,
+                "source": self.name,
+                "total_extracted": len(detailed_leads),
+                "total_stored": len(detailed_leads),
+                "total_duplicates": 0,
+                "leads": detailed_leads,
+                "dataQuality": data_quality.dict()
+            }
             
         except Exception as exc:
             await self._capture_failure_artifacts(ctx, exc, page)
-            logger.error("{} discovery failed | error={}", self.name, exc)
-            return []
+            logger.error("{} scrape failed | error={}", self.name, exc)
+            return {
+                "success": False,
+                "source": self.name,
+                "total_extracted": len(detailed_leads),
+                "total_stored": len(detailed_leads),
+                "leads": detailed_leads,
+                "error": str(exc)
+            }
         finally:
             await browser_pool.release(page, self.name)
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=3))
@@ -826,82 +909,4 @@ class GoogleMapsScraper(BaseScraper):
             
             logger.debug("Captured failure artifacts for {}: {}", business_name, self.debug_dir)
         except Exception as e:
-            logger.debug("Failed to capture debug artifacts: {}", str(e))
-    # Inherit remaining methods from base implementation with minor modifications
-    async def extract(self, ctx: ScrapeContext, discovered: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        return [dict(item) for item in discovered]
-
-    async def enrich(self, ctx: ScrapeContext, leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Enrich leads with additional data and email extraction."""
-        enriched: List[Dict[str, Any]] = []
-        
-        # Import website scraper for email extraction
-        try:
-            from ..website.scraper import WebsiteScraper
-            website_scraper = WebsiteScraper()
-        except ImportError:
-            website_scraper = None
-            logger.warning("Could not import WebsiteScraper for email extraction")
-        
-        for lead in leads:
-            normalized = self._normalize_lead(dict(lead))
-            
-            # Set search context
-            normalized["searchedKeyword"] = ctx.keyword
-            normalized["searchedLocation"] = ctx.location or ctx.city or ctx.state or ctx.country or None
-            normalized["searchedCity"] = ctx.city
-            normalized["searchedState"] = ctx.state
-            normalized["searchedCountry"] = ctx.country
-            normalized["fullSearchQuery"] = ctx.search_url or None
-            normalized["businessType"] = ctx.business_type or ctx.keyword
-            
-            # Extract email from website if website is available
-            if normalized.get("website") and website_scraper:
-                try:
-                    email = await website_scraper.extract_email_from_website(normalized["website"])
-                    normalized["email"] = email
-                except Exception as e:
-                    logger.warning("Failed to extract email for {}: {}", normalized.get("companyName", "Unknown"), str(e))
-                    normalized["email"] = None
-            else:
-                normalized["email"] = None
-            
-            # Calculate lead score with all the extracted data
-            normalized["leadScore"] = calculate_lead_score(normalized)
-            enriched.append(normalized)
-            
-        return enriched
-
-    async def validate(self, ctx: ScrapeContext, lead: Optional[Dict[str, Any]] = None) -> bool:
-        return bool((ctx.keyword or ctx.business_type) and (ctx.location or ctx.city or ctx.state or ctx.country))
-
-    async def scrape(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
-        ctx = self._coerce_context(*args, **kwargs)
-        try:
-            discovered = await self._run_with_retries(ctx, self.discover)
-            extracted = await self.extract(ctx, discovered)
-            enriched = await self.enrich(ctx, extracted)
-            
-            # Include data quality in response
-            data_quality = ctx.metadata.get('dataQuality')
-            
-            return {
-                "success": bool(enriched),
-                "source": self.name,
-                "total_extracted": len(enriched),
-                "total_stored": len(enriched),
-                "total_duplicates": 0,
-                "leads": enriched,
-                "dataQuality": data_quality
-            }
-        except Exception as exc:
-            logger.error("{} scrape failed | error={}", self.name, exc)
-            return {
-                "success": False, 
-                "source": self.name, 
-                "total_extracted": 0, 
-                "total_stored": 0, 
-                "total_duplicates": 0, 
-                "leads": [], 
-                "error": str(exc)
-            }
+            logger.debug("Failed to capture debug artifacts: {}", str(e))

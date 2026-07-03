@@ -25,6 +25,7 @@ class ScrapeJob:
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     task: Optional[asyncio.Task] = None
+    new_leads: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -76,6 +77,22 @@ class JobManager:
             job_id,
             time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(job.started_at)),
         )
+
+    def add_lead(self, job_id: str, lead: Dict[str, Any]) -> None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if not job:
+                return
+            job.new_leads.append(lead)
+
+    def consume_leads(self, job_id: str) -> List[Dict[str, Any]]:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if not job:
+                return []
+            leads = job.new_leads
+            job.new_leads = []
+            return leads
 
     def complete(self, job_id: str, result: ScrapeResponse) -> None:
         with self._lock:
