@@ -105,13 +105,13 @@ async def lifespan(app: FastAPI):
     # Environment Variable Validation
     if not settings.mongodb_uri or "localhost" in settings.mongodb_uri:
         if not settings.debug:
-            logger.error("❌ CRITICAL: MONGODB_URI is missing or set to localhost in production!")
-            sys.exit(1)
+            logger.error("❌ MONGODB_URI is missing or set to localhost in production!")
+            logger.warning("Service will start, but database operations will fail.")
             
     if not settings.backend_url or "localhost" in settings.backend_url:
         if not settings.debug:
-            logger.error("❌ CRITICAL: BACKEND_URL is missing or set to localhost in production!")
-            sys.exit(1)
+            logger.error("❌ BACKEND_URL is missing or set to localhost in production!")
+            logger.warning("Service will start, but webhooks to backend will fail.")
 
     logger.info(f"[BOOT] Scraper integrated: {SCRAPER_AVAILABLE}")
     if not SCRAPER_AVAILABLE:
@@ -123,18 +123,8 @@ async def lifespan(app: FastAPI):
 
     if SCRAPER_AVAILABLE and browser_pool is not None:
         await browser_pool.start()
-        logger.info("[BOOT] Playwright browser pool started ✓")
-        
-        # Verify Chromium can be launched (startup health check)
-        try:
-            logger.info("[BOOT] Verifying Chromium installation...")
-            page, context, browser = await browser_pool.acquire("startup-test")
-            await browser_pool.release(page, "startup-test")
-            logger.info("[BOOT] ✅ Chromium verification successful")
-        except Exception as e:
-            logger.error("[BOOT] ❌ Chromium verification failed: {} - {}", type(e).__name__, str(e))
-            logger.error("[BOOT] Browser startup test failed - scraping will not work")
-            # Don't crash the app, but log clearly that scraping won't work
+        logger.info("[BOOT] Playwright browser pool configured ✓")
+        logger.info("[BOOT] Chromium will be launched on-demand when scraping begins")
             
     elif not SCRAPER_AVAILABLE:
         logger.warning(

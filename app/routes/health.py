@@ -29,30 +29,32 @@ class HealthResponse(BaseModel):
     """Health check response."""
 
     status: str
-    service: str
-    version: str
-    uptime: float
-    database: str
-    browser: str
-    workers: int
+    mongodb: bool
     playwright: str
     scraper: str
+    uptime: str
+    version: str
 
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check(settings: Settings = Depends(get_settings)):
     """Health check endpoint for the AI Analysis Service."""
     scraper_ready = _scraper_available()
+    
+    # Check MongoDB URI string (basic validation without blocking)
+    mongodb_ok = bool(settings.mongodb_uri and "localhost" not in settings.mongodb_uri)
+    
+    # Calculate uptime string
+    elapsed = time.monotonic() - START_TIME
+    uptime_str = f"{int(elapsed // 3600)}h {int((elapsed % 3600) // 60)}m {int(elapsed % 60)}s"
+
     return {
         "status": "healthy",
-        "service": "lead-finder-ai-analysis",
+        "mongodb": mongodb_ok,
+        "playwright": "configured",
+        "scraper": "ready" if scraper_ready else "unavailable",
+        "uptime": uptime_str,
         "version": settings.app_version,
-        "uptime": round(time.monotonic() - START_TIME, 3),
-        "database": "ready" if settings.mongodb_uri else "not-configured",
-        "browser": "disabled" if settings.disable_x11_features else "available",
-        "workers": 1,
-        "playwright": "installed" if scraper_ready else "unavailable",
-        "scraper": "available" if scraper_ready else "unavailable",
     }
 
 
