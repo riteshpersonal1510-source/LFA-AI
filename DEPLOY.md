@@ -4,7 +4,7 @@
 
 ### Build Command
 ```bash
-cd ai-service && pip install --upgrade pip && pip install -r requirements.txt && playwright install --with-deps chromium
+cd ai-service && chmod +x build-improved.sh && ./build-improved.sh
 ```
 
 ### Start Command  
@@ -20,8 +20,8 @@ cd ai-service && python -m uvicorn main:app --host 0.0.0.0 --port $PORT
 
 ## Critical Requirements
 
-1. **Playwright Installation**: The build command MUST include `playwright install --with-deps chromium`
-2. **System Dependencies**: Render automatically provides required system packages for Chromium
+1. **Playwright Installation**: The build command MUST run `./build-improved.sh` which executes `playwright install chromium` (without `--with-deps` to avoid root escalation on Render).
+2. **System Dependencies**: Render automatically provides required system packages for Chromium natively.
 3. **Headless Mode**: Browser must run in headless mode in production
 4. **Memory**: Each browser instance uses ~50-100MB RAM
 
@@ -38,7 +38,7 @@ After deployment, test these endpoints:
 ## Troubleshooting
 
 ### "Executable doesn't exist" Error
-- Build command missing `playwright install --with-deps chromium`
+- Build command missing `./build-improved.sh` or `playwright install chromium`
 - Clear build cache and redeploy
 
 ### "BrowserPool: could not acquire" Error  

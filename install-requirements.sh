@@ -15,7 +15,7 @@ pip install -r requirements.txt --verbose
 
 # Install Playwright and browsers
 echo "Installing Playwright..."
-playwright install --with-deps chromium
+playwright install chromium
 
 echo "Verifying installations..."
 python -c "import fastapi; print(f'FastAPI: {fastapi.__version__}')" 2>/dev/null || echo "FastAPI check failed"

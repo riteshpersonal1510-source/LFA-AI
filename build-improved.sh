@@ -42,14 +42,11 @@ python -c "import playwright; print(f'Playwright {playwright.__version__} instal
     exit 1
 }
 
-# Install Chromium with system dependencies
+# Install Chromium without system dependencies (Render does not allow sudo/su)
 echo "🎭 Installing Chromium browser..."
-playwright install --with-deps chromium 2>&1 || {
-    echo "⚠️ First install attempt failed, trying without --with-deps..."
-    playwright install chromium 2>&1 || {
-        echo "❌ Chromium installation failed completely"
-        exit 1
-    }
+playwright install chromium 2>&1 || {
+    echo "❌ Chromium installation failed completely"
+    exit 1
 }
 
 # Step 3: Comprehensive verification
